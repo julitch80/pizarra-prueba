@@ -1,0 +1,544 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Flujo eléctrico y ley de Gauss: escena piloto</title>
+<style>
+:root{
+  --bg:#EEF2F5; --ink:#1C2430; --muted:#5B6676; --line:#CBD3DC;
+  --field:#13806B; --pos:#CC3B2C; --neg:#2D63C2; --surface:#7446B5;
+  --out:#D48A06; --in:#1597B8;
+  --hud-bg:rgba(250,252,253,.9);
+  color-scheme: light;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#10161D; --ink:#E6ECF2; --muted:#93A0B0; --line:#2B3846;
+    --field:#3CC9A6; --pos:#FF6B5A; --neg:#6F9BFF; --surface:#B48CFF;
+    --out:#FFB534; --in:#4FD3F0;
+    --hud-bg:rgba(20,28,37,.9);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#10161D; --ink:#E6ECF2; --muted:#93A0B0; --line:#2B3846;
+  --field:#3CC9A6; --pos:#FF6B5A; --neg:#6F9BFF; --surface:#B48CFF;
+  --out:#FFB534; --in:#4FD3F0;
+  --hud-bg:rgba(20,28,37,.9);
+  color-scheme: dark;
+}
+*,*::before,*::after{box-sizing:inherit}
+html{height:100%;scroll-padding-top:env(safe-area-inset-top,0px)}
+body{
+  height:100%;margin:0;overflow:hidden;background:var(--bg);color:var(--ink);
+  font-family:"Atkinson Hyperlegible","Segoe UI",system-ui,-apple-system,sans-serif;
+  font-size:17px;line-height:1.4;
+}
+canvas{position:fixed;inset:0;display:block;touch-action:manipulation;cursor:pointer}
+.math{font-family:"STIX Two Text","Cambria Math","Times New Roman",serif;font-style:italic}
+
+.readout{
+  position:fixed;top:0;left:0;
+  padding:calc(18px + env(safe-area-inset-top,0px)) 22px 0 22px;
+  pointer-events:none;
+}
+.readout .label{color:var(--muted);font-size:16px}
+.readout .big{font-size:52px;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;color:var(--surface)}
+.readout table{border-collapse:collapse;font-variant-numeric:tabular-nums}
+.readout td{padding:2px 14px 2px 0;font-size:22px}
+.readout td.n{font-weight:700;text-align:right;min-width:2.2em}
+.readout .sw{display:inline-block;width:12px;height:12px;border-radius:50%;margin-right:8px;vertical-align:1px}
+.readout tr.net td{border-top:1px solid var(--line);padding-top:6px;color:var(--surface)}
+
+.formula{
+  position:fixed;top:0;right:0;text-align:right;
+  padding:calc(18px + env(safe-area-inset-top,0px)) 24px 0 0;
+  pointer-events:none;
+}
+.formula .eq{font-size:44px;line-height:1.1}
+.formula .eq sub{font-size:.5em}
+.formula .frac{display:inline-flex;flex-direction:column;align-items:center;vertical-align:middle;margin-left:.2em}
+.formula .frac span:first-child{border-bottom:2px solid currentColor;padding:0 .15em}
+.formula .sub2{color:var(--muted);font-size:20px;margin-top:6px}
+
+.hint{
+  position:fixed;left:50%;top:42%;transform:translate(-50%,-50%);
+  color:var(--muted);font-size:20px;text-align:center;pointer-events:none;
+  max-width:28ch;
+}
+.hint kbd{font-family:inherit;border:1px solid var(--line);border-radius:5px;padding:1px 7px;color:var(--ink)}
+
+.panel{
+  position:fixed;left:16px;bottom:118px;max-width:min(460px,calc(100vw - 32px));
+  background:var(--hud-bg);border:1px solid var(--line);border-radius:10px;
+  padding:14px 18px;font-size:15px;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+}
+.panel h2{font-size:16px;margin:0 0 8px}
+.panel dl{margin:0;display:grid;grid-template-columns:auto 1fr;gap:4px 12px}
+.panel dt{color:var(--muted)}
+.panel dd{margin:0}
+.panel p{margin:10px 0 0;color:var(--muted)}
+
+.hud{
+  position:fixed;left:0;right:0;bottom:0;
+  padding:10px 16px calc(10px + env(safe-area-inset-bottom,0px));
+  background:var(--hud-bg);border-top:1px solid var(--line);
+  backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+  display:grid;grid-template-columns:1fr auto;gap:8px 16px;align-items:center;
+  transition:transform .25s ease;
+}
+.hud.hidden{transform:translateY(110%)}
+.where{display:flex;align-items:baseline;gap:12px;min-width:0}
+.num{color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
+.title{font-weight:700;font-size:19px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tag{font-size:14px;color:var(--surface);border:1.5px solid var(--surface);border-radius:999px;padding:0 9px;white-space:nowrap}
+.btns{display:flex;gap:6px;justify-content:flex-end}
+.btns button{
+  min-width:46px;height:44px;border-radius:8px;border:1px solid var(--line);
+  background:transparent;color:var(--ink);cursor:pointer;display:grid;place-items:center;
+}
+.btns button.primary{background:var(--ink);color:var(--bg);border-color:var(--ink);min-width:64px}
+.btns button:focus-visible,.dots button:focus-visible,input:focus-visible{outline:3px solid var(--surface);outline-offset:2px}
+.btns .sep{width:1px;background:var(--line);margin:4px 4px}
+.track{grid-column:1 / -1;display:flex;align-items:center;gap:14px}
+.dots{display:flex;gap:5px;flex-shrink:0}
+.dots button{width:22px;height:22px;border:none;background:transparent;padding:0;cursor:pointer;display:grid;place-items:center}
+.dots button i{display:block;width:9px;height:9px;border-radius:50%;background:var(--line)}
+.dots button.done i{background:var(--muted)}
+.dots button.cur i{background:var(--ink);transform:scale(1.35)}
+.dots button.prop i{box-shadow:0 0 0 2px var(--surface)}
+input[type=range]{flex:1;accent-color:var(--surface);min-width:80px}
+@media (max-width:640px){
+  .hud{grid-template-columns:1fr}
+  .btns{justify-content:flex-start}
+  .readout .big{font-size:40px}
+  .formula .eq{font-size:32px}
+}
+</style>
+</head>
+<body>
+<canvas id="cv" aria-label="Animación por pasos del campo eléctrico de una carga puntual y del flujo a través de superficies abiertas y cerradas"></canvas>
+
+<div id="readout" class="readout" hidden></div>
+<div id="formula" class="formula" hidden></div>
+<div id="hint" class="hint">Presiona <kbd>→</kbd> o toca la pantalla para comenzar</div>
+
+<aside id="panel" class="panel" hidden aria-label="Parámetros de la escena">
+  <h2>Parámetros y supuestos</h2>
+  <dl>
+    <dt>Carga</dt><dd id="pq">+1,0 q</dd>
+    <dt>Líneas</dt><dd>16 por unidad de carga</dd>
+    <dt>Vectores</dt><dd>longitud ∝ 1/r², recortada cerca de la carga</dd>
+    <dt>Convención</dt><dd>salen de cargas positivas, entran a negativas</dd>
+    <dt>Flujo</dt><dd>líneas netas: las que salen menos las que entran</dd>
+  </dl>
+  <p>Modelo 2D: corte de una situación 3D. El círculo representa una esfera y el cuadrado un cubo. En el corte, la densidad de líneas decae como 1/r y no como 1/r², así que el conteo es cualitativo en superficies abiertas y exacto en superficies cerradas.</p>
+</aside>
+
+<footer id="hud" class="hud">
+  <div class="where">
+    <span id="stepNum" class="num"></span>
+    <span id="stepTitle" class="title"></span>
+    <span id="tag" class="tag" hidden>Propuesta</span>
+  </div>
+  <div class="btns">
+    <button id="bPrev" aria-label="Paso anterior (flecha izquierda)" title="Paso anterior (←)">
+      <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M11.5 3 5.5 9l6 6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+    <button id="bReplay" aria-label="Repetir paso (R)" title="Repetir paso (R)">
+      <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M3.5 9a5.5 5.5 0 1 0 1.8-4.1M3.5 3v3.2h3.2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+    <button id="bNext" class="primary" aria-label="Siguiente (flecha derecha o espacio)" title="Siguiente (→ o espacio)">
+      <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M6.5 3l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+    <span class="sep" aria-hidden="true"></span>
+    <button id="bPanel" aria-label="Mostrar parámetros (P)" title="Parámetros (P)">
+      <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><circle cx="9" cy="9" r="7" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M9 8v5M9 5.2v.1" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+    </button>
+    <button id="bFull" aria-label="Pantalla completa (F)" title="Pantalla completa (F)">
+      <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M3 7V3h4M11 3h4v4M15 11v4h-4M7 15H3v-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+  </div>
+  <div class="track">
+    <div id="dots" class="dots" role="group" aria-label="Pasos"></div>
+    <input id="scrub" type="range" min="0" max="1000" value="0" aria-label="Avance dentro del paso">
+  </div>
+</footer>
+
+<script>
+(function(){
+"use strict";
+const $=s=>document.querySelector(s);
+const cv=$("#cv"), ctx=cv.getContext("2d");
+const hud=$("#hud"), readout=$("#readout"), formula=$("#formula"), hint=$("#hint");
+let W=0,H=0,DPR=1,S=1,OX=0,OY=0,RMAX=1000;
+let C={};
+
+function readColors(){
+  const cs=getComputedStyle(document.documentElement);
+  ["bg","ink","muted","line","field","pos","neg","surface","out","in"].forEach(k=>C[k]=cs.getPropertyValue("--"+k).trim());
+}
+function resize(){
+  DPR=Math.min(window.devicePixelRatio||1,2);
+  W=window.innerWidth; H=window.innerHeight;
+  cv.width=Math.round(W*DPR); cv.height=Math.round(H*DPR);
+  cv.style.width=W+"px"; cv.style.height=H+"px";
+  const hudH=hud.classList.contains("hidden")?0:hud.offsetHeight;
+  S=Math.min(W,H-hudH)/900;
+  OX=W/2; OY=(H-hudH)/2;
+  RMAX=Math.hypot(W,H)/S*0.6+40;
+}
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const ease=t=>t<.5?4*t*t*t:1-Math.pow(-2*t+2,3)/2;
+const toS=(x,y)=>[OX+x*S,OY-y*S];
+const DEG=Math.PI/180;
+
+/* ---------- Pasos ---------- */
+const STEPS=[
+  {title:"Una carga eléctrica",dur:1200,apply:(p,e)=>{p.chargeA=e}},
+  {title:"El espacio a su alrededor cambia",dur:2600,apply:(p,e)=>{p.front=e}},
+  {title:"Vectores de campo",dur:2600,apply:(p,e)=>{p.vecReveal=e}},
+  {title:"Divergen o convergen según el signo",dur:4600,apply:(p,e)=>{p.q=Math.cos(2*Math.PI*e)}},
+  {title:"Los vectores forman líneas de campo",dur:3200,apply:(p,e)=>{p.lineProg=e;p.vecAlpha=1-0.8*e}},
+  {title:"Líneas que atraviesan una superficie",dur:1800,apply:(p,e)=>{p.segA=e}},
+  {title:"La orientación de la superficie importa",prop:true,dur:4600,apply:(p,e)=>{p.phi=75*DEG*Math.sin(Math.PI*e)}},
+  {title:"Una superficie que encierra la carga",dur:3200,apply:(p,e)=>{p.segA=1-clamp(e/0.3,0,1);p.closedA=clamp((e-0.2)/0.8,0,1)}},
+  {title:"Círculo o cuadrado: el flujo no cambia",dur:3400,apply:(p,e)=>{p.morph=e;p.scale=1+0.3*e}},
+  {title:"Solo importa la carga encerrada",dur:3400,apply:(p,e)=>{p.q=1+e;p.formulaA=e}},
+  {title:"Carga fuera de la superficie: flujo neto cero",prop:true,dur:4400,apply:(p,e)=>{p.cx=360*e;p.scale=1.3-0.3*e}}
+];
+const DEF={chargeA:0,front:0,vecReveal:0,q:1,lineProg:0,vecAlpha:1,segA:0,phi:0,closedA:0,morph:0,scale:1,cx:0,formulaA:0};
+function paramsAt(step,t){
+  const p=Object.assign({},DEF);
+  for(let j=0;j<step;j++) STEPS[j].apply(p,1);
+  STEPS[step].apply(p,ease(t));
+  return p;
+}
+
+/* ---------- Estado de reproducción ---------- */
+let step=0,t=0,playing=false,started=false,last=performance.now();
+function play(s){step=s;t=0;playing=true;started=true;syncHud();}
+function next(){
+  if(!started){play(0);return;}
+  if(playing||t<1){t=1;playing=false;syncHud();return;}
+  if(step<STEPS.length-1) play(step+1);
+}
+function prev(){
+  if(step===0){t=0;playing=false;started=false;syncHud();return;}
+  step--;t=1;playing=false;syncHud();
+}
+function replay(){play(step);}
+
+/* ---------- Geometría ---------- */
+const R0=24, BASE=16;
+function bitrev4(j){return ((j&1)<<3)|((j&2)<<1)|((j&4)>>1)|((j&8)>>3);}
+function linesFor(q){
+  const aq=Math.abs(q), out=[];
+  for(let i=0;i<BASE;i++) out.push({a:i*(360/BASE)*DEG,la:1});
+  for(let j=0;j<BASE;j++){
+    const la=clamp((aq-1)*BASE-bitrev4(j),0,1);
+    if(la>0) out.push({a:(j*(360/BASE)+180/BASE)*DEG,la});
+  }
+  return out;
+}
+function polygon(p){
+  const M=240, R=230*p.scale, pts=[];
+  for(let k=0;k<M;k++){
+    const th=2*Math.PI*k/M, c=Math.cos(th), s=Math.sin(th);
+    const rs=0.9/Math.max(Math.abs(c),Math.abs(s));
+    const r=R*((1-p.morph)+p.morph*rs);
+    pts.push([p.cx+r*c,r*s]);
+  }
+  return pts;
+}
+function raySeg(dx,dy,p1,p2){
+  const ex=p2[0]-p1[0], ey=p2[1]-p1[1];
+  const den=dx*ey-dy*ex;
+  if(Math.abs(den)<1e-9) return null;
+  const s=(p1[0]*ey-p1[1]*ex)/den;
+  const u=(p1[0]*dy-p1[1]*dx)/den;
+  return {s,u,ex,ey};
+}
+function inside(pts,x,y){
+  let c=false;
+  for(let i=0,j=pts.length-1;i<pts.length;j=i++){
+    const [xi,yi]=pts[i],[xj,yj]=pts[j];
+    if(((yi>y)!==(yj>y))&&(x<(xj-xi)*(y-yi)/(yj-yi)+xi)) c=!c;
+  }
+  return c;
+}
+
+/* ---------- Dibujo ---------- */
+function arrowS(x1,y1,x2,y2,head,w){
+  const dx=x2-x1, dy=y2-y1, L=Math.hypot(dx,dy); if(L<0.5) return;
+  const ux=dx/L, uy=dy/L, h=Math.min(head,L*0.55);
+  ctx.lineWidth=w;
+  ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2-ux*h*0.6,y2-uy*h*0.6); ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(x2,y2);
+  ctx.lineTo(x2-ux*h-uy*h*0.45,y2-uy*h+ux*h*0.45);
+  ctx.lineTo(x2-ux*h+uy*h*0.45,y2-uy*h-ux*h*0.45);
+  ctx.closePath(); ctx.fill();
+}
+function headAt(x,y,ux,uy,h){
+  ctx.beginPath();
+  ctx.moveTo(x+ux*h*0.5,y+uy*h*0.5);
+  ctx.lineTo(x-ux*h*0.5-uy*h*0.42,y-uy*h*0.5+ux*h*0.42);
+  ctx.lineTo(x-ux*h*0.5+uy*h*0.42,y-uy*h*0.5-ux*h*0.42);
+  ctx.closePath(); ctx.fill();
+}
+
+let lastReadout="", lastFormula="";
+function render(){
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  ctx.globalAlpha=1;
+  ctx.fillStyle=C.bg; ctx.fillRect(0,0,W,H);
+  const p=started?paramsAt(step,t):Object.assign({},DEF);
+  const q=p.q, aq=Math.abs(q), sg=q>=0?1:-1;
+  const qCol=q>=0?C.pos:C.neg;
+  const [cxS,cyS]=toS(0,0);
+
+  /* halo del campo */
+  if(p.front>0){
+    const rr=Math.max(1,p.front*RMAX*S);
+    const g=ctx.createRadialGradient(cxS,cyS,0,cxS,cyS,rr);
+    ctx.globalAlpha=0.22*Math.min(1,aq+0.15);
+    g.addColorStop(0,qCol); g.addColorStop(0.12,qCol); g.addColorStop(1,"rgba(0,0,0,0)");
+    ctx.save(); ctx.globalAlpha*=0.5; ctx.fillStyle=g;
+    ctx.beginPath(); ctx.arc(cxS,cyS,rr,0,2*Math.PI); ctx.fill(); ctx.restore();
+    if(p.front<1){
+      ctx.globalAlpha=0.7*(1-p.front);
+      ctx.strokeStyle=qCol; ctx.lineWidth=2;
+      ctx.beginPath(); ctx.arc(cxS,cyS,rr,0,2*Math.PI); ctx.stroke();
+    }
+  }
+
+  /* vectores */
+  if(p.vecReveal>0){
+    const sp=70, rev=p.vecReveal*RMAX*0.85, n=Math.ceil(RMAX/sp);
+    ctx.strokeStyle=C.field; ctx.fillStyle=C.field;
+    for(let i=-n;i<=n;i++)for(let j=-n;j<=n;j++){
+      const x=i*sp+sp/2, y=j*sp+sp/2, r=Math.hypot(x,y);
+      if(r<55) continue;
+      const grow=clamp((rev-r)/90,0,1); if(grow<=0) continue;
+      const L=Math.min(46,810000*aq/(r*r))*grow;
+      if(L<1.5) continue;
+      const ux=sg*x/r, uy=sg*y/r;
+      const [ax,ay]=toS(x-ux*L/2,y-uy*L/2), [bx,by]=toS(x+ux*L/2,y+uy*L/2);
+      ctx.globalAlpha=p.vecAlpha*(0.35+0.65*Math.min(1,L/30));
+      arrowS(ax,ay,bx,by,Math.max(5,9*S*1.4),Math.max(1.4,2*S*1.2));
+    }
+  }
+
+  /* líneas de campo */
+  const lines=linesFor(q);
+  const Lv=R0+p.lineProg*(RMAX-R0);
+  if(p.lineProg>0){
+    ctx.strokeStyle=C.field; ctx.fillStyle=C.field;
+    for(const ln of lines){
+      const c=Math.cos(ln.a), s=Math.sin(ln.a);
+      ctx.globalAlpha=0.9*ln.la;
+      const [x1,y1]=toS(R0*c,R0*s), [x2,y2]=toS(Lv*c,Lv*s);
+      ctx.lineWidth=Math.max(1.6,2.2*S*1.2);
+      ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
+      for(const rh of [120,280,460,680]){
+        if(rh<Lv-10){
+          const [hx,hy]=toS(rh*c,rh*s);
+          headAt(hx,hy,sg*c,-sg*s,Math.max(9,13*S*1.3));
+        }
+      }
+    }
+  }
+
+  /* superficies y cruces */
+  let mode=null, outN=0, inN=0, crossings=[], encl=null;
+  if(p.segA>0){
+    const beta=(180/BASE)*DEG, Rc=230;
+    const Cx=Rc*Math.cos(beta), Cy=Rc*Math.sin(beta);
+    const nx=Math.cos(beta+p.phi), ny=Math.sin(beta+p.phi);
+    const tx=-ny, ty=nx, h=200*p.segA;
+    const P1=[Cx-tx*h,Cy-ty*h], P2=[Cx+tx*h,Cy+ty*h];
+    const segAlpha=Math.min(1,p.segA*1.5);
+    ctx.globalAlpha=segAlpha;
+    ctx.strokeStyle=C.surface; ctx.fillStyle=C.surface; ctx.lineCap="round";
+    const [a1,b1]=toS(...P1),[a2,b2]=toS(...P2);
+    ctx.lineWidth=Math.max(4,6*S); ctx.beginPath(); ctx.moveTo(a1,b1); ctx.lineTo(a2,b2); ctx.stroke();
+    ctx.lineCap="butt";
+    if(p.segA>0.6){
+      const [n1x,n1y]=toS(Cx,Cy),[n2x,n2y]=toS(Cx+nx*70,Cy+ny*70);
+      ctx.globalAlpha=segAlpha*0.9;
+      arrowS(n1x,n1y,n2x,n2y,12,2.2);
+      ctx.font="italic 600 "+Math.round(Math.max(16,22*S*1.2))+"px 'STIX Two Text', serif";
+      ctx.fillText("n̂",n2x+8,n2y-6);
+    }
+    if(p.closedA===0 && p.lineProg>0){
+      mode="open";
+      for(const ln of lines){
+        if(ln.la<0.5) continue;
+        const dx=Math.cos(ln.a), dy=Math.sin(ln.a);
+        const r=raySeg(dx,dy,P1,P2);
+        if(r && r.s>R0 && r.s<Lv && r.u>=0 && r.u<=1){
+          const sgn=sg*Math.sign(dx*nx+dy*ny);
+          crossings.push({x:r.s*dx,y:r.s*dy,o:sgn>0});
+          if(sgn>0) outN++; else inN++;
+        }
+      }
+    }
+  }
+  if(p.closedA>0){
+    const pts=polygon(p), M=pts.length, kRev=Math.floor(p.closedA*M);
+    ctx.strokeStyle=C.surface; ctx.lineWidth=Math.max(3,4.5*S); ctx.lineJoin="round";
+    if(p.closedA>=1){
+      ctx.globalAlpha=0.07; ctx.fillStyle=C.surface;
+      ctx.beginPath(); pts.forEach((pt,i)=>{const [x,y]=toS(...pt); i?ctx.lineTo(x,y):ctx.moveTo(x,y);}); ctx.closePath(); ctx.fill();
+    }
+    ctx.globalAlpha=1;
+    ctx.beginPath();
+    for(let k=0;k<=Math.min(kRev,M);k++){const [x,y]=toS(...pts[k%M]); k?ctx.lineTo(x,y):ctx.moveTo(x,y);}
+    ctx.stroke();
+    if(p.lineProg>0){
+      mode="closed";
+      for(const ln of lines){
+        if(ln.la<0.5) continue;
+        const dx=Math.cos(ln.a), dy=Math.sin(ln.a), hits=[];
+        for(let k=0;k<Math.min(kRev,M);k++){
+          const r=raySeg(dx,dy,pts[k],pts[(k+1)%M]);
+          if(r && r.s>R0 && r.s<Lv && r.u>=-1e-6 && r.u<=1+1e-6){
+            if(hits.some(hh=>Math.abs(hh-r.s)<0.5)) continue;
+            hits.push(r.s);
+            const nX=r.ey, nY=-r.ex;
+            const sgn=sg*Math.sign(dx*nX+dy*nY);
+            crossings.push({x:r.s*dx,y:r.s*dy,o:sgn>0});
+            if(sgn>0) outN++; else inN++;
+          }
+        }
+      }
+    }
+    if(p.closedA>=1) encl=inside(pts,0,0);
+  }
+  for(const c of crossings){
+    const [x,y]=toS(c.x,c.y);
+    ctx.globalAlpha=1;
+    ctx.fillStyle=c.o?C.out:C.in; ctx.strokeStyle=C.bg; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.arc(x,y,Math.max(5,7*S*1.2),0,2*Math.PI); ctx.fill(); ctx.stroke();
+  }
+
+  /* carga */
+  if(p.chargeA>0){
+    const rad=(15+5*Math.min(aq,2))*Math.max(0.8,S*1.15);
+    ctx.globalAlpha=p.chargeA*(aq<0.08?0.5:1);
+    ctx.fillStyle=aq<0.08?C.muted:qCol;
+    ctx.beginPath(); ctx.arc(cxS,cyS,rad,0,2*Math.PI); ctx.fill();
+    ctx.strokeStyle=C.bg; ctx.lineWidth=Math.max(2.5,rad*0.16); ctx.lineCap="round";
+    if(aq>=0.08){
+      const k=rad*0.48;
+      ctx.beginPath(); ctx.moveTo(cxS-k,cyS); ctx.lineTo(cxS+k,cyS);
+      if(q>0){ctx.moveTo(cxS,cyS-k); ctx.lineTo(cxS,cyS+k);}
+      ctx.stroke();
+    }
+    ctx.lineCap="butt";
+  }
+  ctx.globalAlpha=1;
+
+  /* lecturas */
+  let html="";
+  if(mode==="open"){
+    html='<div class="label">Líneas que atraviesan la superficie</div><div class="big">'+(outN+inN)+'</div>';
+  } else if(mode==="closed"){
+    html='<table><tr><td><span class="sw" style="background:'+C.out+'"></span>Salen</td><td class="n">'+outN+'</td></tr>'+
+         '<tr><td><span class="sw" style="background:'+C.in+'"></span>Entran</td><td class="n">'+inN+'</td></tr>'+
+         '<tr class="net"><td>Netas</td><td class="n">'+(outN-inN)+'</td></tr></table>';
+  }
+  if(html!==lastReadout){readout.innerHTML=html; readout.hidden=!html; lastReadout=html;}
+
+  let fh="";
+  if(p.formulaA>0){
+    const qs=Math.abs(q-Math.round(q))<0.05?(Math.round(q)===1?"q":Math.round(q)+"q"):q.toFixed(1).replace(".",",")+"q";
+    const enc=(encl===false)?"0":qs;
+    fh='<div class="eq math">Φ = <span class="frac"><span>q<sub>enc</sub></span><span>ε<sub>0</sub></span></span></div>'+
+       '<div class="sub2"><span class="math">q</span><sub>enc</sub> = <span class="math">'+enc+'</span></div>';
+    formula.style.opacity=Math.min(1,p.formulaA*1.6);
+  }
+  if(fh!==lastFormula){formula.innerHTML=fh; formula.hidden=!fh; lastFormula=fh;}
+  $("#pq").textContent=(q>=0?"+":"−")+Math.abs(q).toFixed(1).replace(".",",")+" q";
+}
+
+/* ---------- HUD ---------- */
+const dots=$("#dots");
+STEPS.forEach((s,i)=>{
+  const b=document.createElement("button");
+  b.innerHTML="<i></i>"; b.title=(i+1)+". "+s.title+(s.prop?" (propuesta)":"");
+  b.setAttribute("aria-label","Ir al paso "+(i+1)+": "+s.title);
+  if(s.prop) b.classList.add("prop");
+  b.addEventListener("click",e=>{e.stopPropagation();play(i);});
+  dots.appendChild(b);
+});
+function syncHud(){
+  $("#stepNum").textContent=(step+1)+" de "+STEPS.length;
+  $("#stepTitle").textContent=started?STEPS[step].title:"Listo para comenzar";
+  $("#tag").hidden=!(started&&STEPS[step].prop);
+  [...dots.children].forEach((b,i)=>{
+    b.classList.toggle("cur",started&&i===step);
+    b.classList.toggle("done",started&&(i<step||(i===step&&t>=1)));
+  });
+  hint.hidden=started;
+}
+const scrub=$("#scrub");
+scrub.addEventListener("input",()=>{started=true;playing=false;t=scrub.value/1000;syncHud();});
+$("#bNext").addEventListener("click",e=>{e.stopPropagation();next();});
+$("#bPrev").addEventListener("click",e=>{e.stopPropagation();prev();});
+$("#bReplay").addEventListener("click",e=>{e.stopPropagation();replay();});
+$("#bPanel").addEventListener("click",e=>{e.stopPropagation();togglePanel();});
+$("#bFull").addEventListener("click",e=>{e.stopPropagation();toggleFull();});
+cv.addEventListener("click",next);
+function togglePanel(){const pn=$("#panel"); pn.hidden=!pn.hidden;}
+function toggleFull(){
+  try{
+    if(!document.fullscreenElement) document.documentElement.requestFullscreen();
+    else document.exitFullscreen();
+  }catch(_){}
+}
+document.addEventListener("keydown",e=>{
+  if(e.target.tagName==="INPUT"&&(e.key==="ArrowLeft"||e.key==="ArrowRight")) return;
+  const k=e.key;
+  if(k==="ArrowRight"||k===" "||k==="PageDown"||k==="Enter"){e.preventDefault();next();}
+  else if(k==="ArrowLeft"||k==="PageUp"){e.preventDefault();prev();}
+  else if(k==="r"||k==="R") replay();
+  else if(k==="p"||k==="P") togglePanel();
+  else if(k==="f"||k==="F") toggleFull();
+  else if(k==="h"||k==="H"){hud.classList.toggle("hidden");resize();}
+});
+
+/* ---------- Bucle ---------- */
+function tick(now){
+  const dt=Math.min(64,now-last); last=now;
+  if(playing){
+    t+=dt/STEPS[step].dur;
+    if(t>=1){t=1;playing=false;syncHud();}
+  }
+  scrub.value=Math.round((started?t:0)*1000);
+  render();
+  requestAnimationFrame(tick);
+}
+window.addEventListener("resize",resize);
+const mq=window.matchMedia("(prefers-color-scheme: dark)");
+(mq.addEventListener?mq.addEventListener("change",readColors):mq.addListener(readColors));
+readColors(); resize(); syncHud();
+if(document.fonts&&document.fonts.ready) document.fonts.ready.then(()=>{lastReadout="";lastFormula="";});
+requestAnimationFrame(tick);
+})();
+</script>
+<script>
+// Prueba de pizarra: guarda la página para que abra sin internet.
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').then(function () {
+    console.log('Guardada para usar sin red');
+  }).catch(function (e) { console.log('No se pudo guardar', e); });
+}
+</script>
+</body>
+</html>
